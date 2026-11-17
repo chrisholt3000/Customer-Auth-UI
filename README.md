@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Next Entra customer portal
 
-## Getting Started
+This Next.js app uses Auth.js with OpenID Connect to sign customers in through
+the same Microsoft Entra External ID tenant as the ASP.NET app. Entra continues
+to invoke the tenant's configured Azure Function/custom claims extension during
+token issuance; this app reads the selected claims from the validated ID token.
 
-First, run the development server:
+## Configure Entra
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Prefer the same Entra External ID app registration as the ASP.NET app so
+   the existing claims extension applies. If you create a separate registration,
+   configure the extension to return claims for that app as well.
+2. Add these **Web** redirect URIs to the app registration:
+   - `http://localhost:3000/api/auth/callback/microsoft-entra-id`
+   - `https://<your-production-host>/api/auth/callback/microsoft-entra-id`
+3. Use the client ID, client secret, and exact OIDC issuer/authority from the
+   ASP.NET configuration. Keep the existing token-issuance extension enabled
+   and ensure its custom claims are included in the ID token for this app.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Configure the app
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Copy `.env.example` to `.env.local` and set:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `AUTH_SECRET`: generate a unique secret with
+  `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`.
+- `AUTH_MICROSOFT_ENTRA_ID_ID`: the app registration's client ID.
+- `AUTH_MICROSOFT_ENTRA_ID_SECRET`: the client secret **value**.
+- `AUTH_MICROSOFT_ENTRA_ID_ISSUER`: the tenant's exact OIDC issuer URL. For
+  External ID, copy this from the ASP.NET app's OIDC configuration/discovery
+  metadata rather than substituting a workforce Entra URL.
+- `AUTH_ENTRA_CUSTOM_CLAIMS`: comma-separated names of the custom ID-token
+  claims to expose, for example `customerId,subscriptionLevel`. Only these
+  allowlisted claims are added to the Auth.js session.
 
-## Learn More
+Keep `.env.local` and all credentials out of source control. Add the same
+variables to the hosting environment. If the Azure hosting setup requires
+Auth.js to trust the forwarded host header, configure `AUTH_TRUST_HOST=true`
+only when requests come through a trusted proxy.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Run locally with `npm run dev`. The home page provides sign-in, sign-out, and a
+view of the configured custom claims. In application code, use `auth()` on the
+server and read the selected values from `session.user.entraClaims`.
